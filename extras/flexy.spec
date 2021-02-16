@@ -41,8 +41,8 @@ See https://buzzworks.com for a full description and documentation.
 mkdir -p $RPM_BUILD_ROOT
 
 # Make directory with our name, instead of with version
-%setup -n flexy
-#%setup
+#%setup -n flexy
+%setup
 
 #%patch
 
