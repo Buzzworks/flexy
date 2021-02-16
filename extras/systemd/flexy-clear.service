@@ -1,0 +1,17 @@
+[Unit]
+Description=Flexydial3.0 Clear Service
+Requires=asterisk.service
+After=asterisk.service
+PartOf=asterisk.service
+
+[Service]
+Nice=19
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+Type=simple
+ExecStart=/usr/bin/flexy clear all
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

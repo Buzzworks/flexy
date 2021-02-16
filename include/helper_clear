@@ -1,0 +1,89 @@
+#!/bin/sh
+
+#################################################################################
+#
+#   Flexy
+# ------------------
+#
+# Copyright 2012-2021, Ganapathi Chidambaram
+# Copyright 2007-2021, Buzzworks Business Services Pvt Ltd
+#
+# Website  : https://buzzworks.com
+# Blog     : http://linux-audit.com
+# GitHub   : https://github.com/buzzworks
+#
+# Flexy comes with ABSOLUTELY NO WARRANTY. This is free software, and you are
+# welcome to redistribute it under the terms of the GNU General Public License.
+# See LICENSE file for usage of this software.
+#
+######################################################################
+#
+# Helper program to clear occupied under Flexy
+#
+######################################################################
+#
+# How to use:
+# ------------
+#
+# Run:
+#   flexy clear quick
+#   flexy clear diallines quick=yes:debug=yes
+#
+######################################################################
+
+    CLEAR_DIALLINES=0
+    CLEAR_SIPIDS=0
+
+    # Check configure mode
+    if [ "${HELPER_PARAMS}" = "" ]; then
+        ${ECHOCMD} "${YELLOW}Provide one or more configuration settings${NORMAL}"
+        ${ECHOCMD} ""
+        ${ECHOCMD} "Examples:"
+        ${ECHOCMD} "  $0 clear"
+        ${ECHOCMD} ""
+        ${ECHOCMD} "  $0 clear diallines quick"
+        ${ECHOCMD} "  $0 clear sipids debug:developer-mode:quick"
+        ${ECHOCMD} "  $0 clear debug=yes:developer-mode=no:quick=yes"
+        ${ECHOCMD} ""
+        ExitClean
+    elif [ "$1" = "all" ]; then
+        CLEAR_DIALLINES=1
+        CLEAR_SIPIDS=1
+    elif [ "$1" = "diallines" ]; then
+        CLEAR_DIALLINES=1
+    elif [ "$1" = "sipids" ]; then
+        CLEAR_SIPIDS=1
+    fi
+
+    if [ -f ${INCLUDEDIR}/custom_functions ]; then
+        SafePerms ${INCLUDEDIR}/custom_functions
+        . ${INCLUDEDIR}/custom_functions
+    fi
+
+    ASTERISKBIN=$(which asterisk 2> /dev/null)
+
+    if [ -z "${ASTERISKBIN// }" -o -z "${MYSQLCLIENTBINARY// }" ]; then
+        ExitFatal "Asterisk or MYSQL binary not found...";
+    fi
+
+    getVirtualHostDir
+
+    if [  -z "${VHOST_DIR[0]// }" ] ; then ExitFatal "No Flexydial Application configured.."; fi
+
+    while true;
+    do
+
+    sleep 60
+
+        if [ ${CLEAR_DIALLINES} -eq 1 ]; then
+            clearDialLines
+        fi
+
+        #if [ ${CLEAR_SIPIDS} -eq 1 ]; then
+        #    ${ECHOCMD} "Automatic clearing of sipids is not implemented yet."
+        #fi
+    done
+
+    ExitClean
+
+# The End

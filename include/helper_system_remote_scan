@@ -1,0 +1,85 @@
+#!/bin/sh
+
+#################################################################################
+#
+#   Flexy
+# ------------------
+#
+# Copyright 2012-2021, Ganapathi Chidambaram
+# Copyright 2007-2021, Buzzworks Business Services Pvt Ltd
+#
+# Website  : https://buzzworks.com
+# Blog     : http://linux-audit.com
+# GitHub   : https://github.com/buzzworks
+#
+# Flexy comes with ABSOLUTELY NO WARRANTY. This is free software, and you are
+# welcome to redistribute it under the terms of the GNU General Public License.
+# See LICENSE file for usage of this software.
+#
+######################################################################
+#
+# Helper program to perform a remote scan
+#
+######################################################################
+#
+# Options:
+# ---------
+# 1) flexy update info     - Show version information (external)
+# 2) flexy update release  - Check and install new release (internal)
+#
+# How to use:
+# ------------
+# Run option 1 to know about current and latest release information.
+# Run option 2 to query internal server for possible upgrade of Flexy.
+#
+# Steps for updating to new release:
+# 1) Run Flexy with: flexy update release
+# 2) Flexy will use this helper and check the profile
+# 3) The configured web server will be queried (flexy-latest-version)
+# 4) The contents of this file will be compared with a local file
+# 5) If there is a difference, download package
+# 6) Check paths and extract files
+# 7) Quit program
+#
+# Suggested documentation if you want to use this functionality:
+# https://buzzworks.com/documentation/flexy/upgrading/
+#
+######################################################################
+
+    # Enable screen output again
+    QUIET=0
+
+    SCP_BINARY=$(which scp 2> /dev/null | grep -v "no [^ ]* in ")
+    SSH_BINARY=$(which ssh 2> /dev/null | grep -v "no [^ ]* in ")
+    if [ "${SCP_BINARY}" = "" ]; then echo "Could not find scp binary"; ExitFatal; fi
+    if [ "${SSH_BINARY}" = "" ]; then echo "Could not find ssh binary"; ExitFatal; fi
+
+    FLEXY_TARBALL="flexy-remote.tar.gz"
+    echo ""
+    echo  "  ${BLUE}* ${WHITE}Step 1${NORMAL}: ${CYAN}Create tarball${NORMAL}"
+    printf "%s\n\n" "    mkdir -p ./files && cd .. && tar czf ./flexy/files/${FLEXY_TARBALL} --exclude=files/${FLEXY_TARBALL} ./flexy && cd flexy"
+
+    echo "  ${BLUE}* ${WHITE}Step 2${NORMAL}: ${CYAN}Copy tarball to target ${REMOTE_TARGET}${NORMAL}"
+    FLEXY_TARBALL="./files/flexy-remote.tar.gz"
+    printf "%s\n\n" "    scp -q ${FLEXY_TARBALL} ${REMOTE_TARGET}:~/tmp-flexy-remote.tgz"
+    #if [ $? -gt 0 ]; then echo "Could not copy tarball to target"; ExitFatal; fi
+
+    echo "  ${BLUE}* ${WHITE}Step 3${NORMAL}: ${CYAN}Execute audit command${NORMAL}"
+
+    printf "%s\n\n" "    ssh ${REMOTE_TARGET} \"mkdir -p ~/tmp-flexy && cd ~/tmp-flexy && tar xzf ../tmp-flexy-remote.tgz && rm ../tmp-flexy-remote.tgz && cd flexy && ${REMOTE_COMMAND}\""
+    #if [ $? -gt 1 ]; then echo "Could not perform remote audit"; ExitFatal; fi
+
+    echo "  ${BLUE}* ${WHITE}Step 4${NORMAL}: ${CYAN}Clean up directory${NORMAL}"
+    printf "%s\n\n" "    ssh ${REMOTE_TARGET} \"rm -rf ~/tmp-flexy\""
+
+    echo "  ${BLUE}* ${WHITE}Step 5${NORMAL}: ${CYAN}Retrieve log and report${NORMAL}"
+    printf "%s\n" "    scp -q ${REMOTE_TARGET}:/tmp/flexy.log ./files/${REMOTE_TARGET}-flexy.log"
+    printf "%s\n\n" "    scp -q ${REMOTE_TARGET}:/tmp/flexy-report.dat ./files/${REMOTE_TARGET}-flexy-report.dat"
+
+    echo "  ${BLUE}* ${WHITE}Step 6${NORMAL}: ${CYAN}Clean up tmp files (when using non-privileged account)${NORMAL}"
+    printf "%s\n\n" "    ssh ${REMOTE_TARGET} \"rm /tmp/flexy.log /tmp/flexy-report.dat\""
+
+    # No more Flexy output
+    QUIET=1
+
+# The End

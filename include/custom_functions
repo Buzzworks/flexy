@@ -1,0 +1,100 @@
+#!/bin/sh
+
+#################################################################################
+#
+#   Flexy
+# ------------------
+#
+# Copyright 2012-2021, Ganapathi Chidambaram
+# Copyright 2007-2021, Buzzworks Business Services Pvt Ltd
+#
+# Website  : https://buzzworks.com
+# Blog     : http://linux-audit.com
+# GitHub   : https://github.com/buzzworks
+#
+# Flexy comes with ABSOLUTELY NO WARRANTY. This is free software, and you are
+# welcome to redistribute it under the terms of the GNU General Public License.
+# See LICENSE file for usage of this software.
+#
+#################################################################################
+
+getVirtualHostDir(){
+
+    APACHECTLBIN=$(which apachectl 2> /dev/null)
+    if [ $? -eq 0 ]; then
+       VHOSTFILES=$(${APACHECTLBIN} -S 2> /dev/null |  ${EGREPBINARY} '(80|443) namevhost' | ${CUTBINARY} -f2 -d\( | ${CUTBINARY} -f1 -d\: | ${SORTBINARY} | ${UNIQBINARY})
+    else
+        ExitClean
+    fi
+    local VHOST=()
+    for f in ${VHOSTFILES}; do
+        VHOST+=($(${GREPBINARY} "<Directory" $f | ${GREPBINARY} -v "cgi-bin" | ${AWKBINARY} '{print $2}' | ${TRBINARY} -d '"'  | ${AWKBINARY} -F\> '{print $1}' ))
+    done
+    VHOST_DIR=($(echo "${VHOST[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+    return;
+}
+
+clearDialLines()
+{
+    GetAsteriskChannels
+
+    if [  -z "${CHANNELS// }" ] ; then return; fi
+
+    for app in "${VHOST_DIR[@]}"; do
+
+        if [ -z "${app// }" -o ! -d "${app}" ]; then ${ECHOCMD} "App ${app} is invalid or directory not found.."; continue; fi
+
+        if ! LoadAppEnv "${app// }" ; then continue; fi
+
+        ${ECHOCMD} " Processing for the app under ${app}..";
+
+        if [ -z "${DB_HOST// }" -o -z "${DB_USERNAME// }" -o -z "${DB_PASSWORD// }" -o -z "${DB_DATABASE// }" ] ; then
+            ${ECHOCMD} "Database Configuration is missing."
+            continue;
+        fi
+
+        ${MYSQLCLIENTBINARY} -h $DB_HOST -u$DB_USERNAME -p$DB_PASSWORD $DB_DATABASE \
+            -e "UPDATE diallines SET status = 'Free',conf='',number='',uniqueid='',src_channel='',channel='',regexstr='',did='' WHERE enabled = 1 and server = '${app_ip}' and status != 'Free' and channel NOT IN ( ${CHANNELS} )" &> /dev/null
+
+        if [ $? -ne 0 ]; then ${ECHOCMD} "Error while exeucting mysql query..."; fi
+
+    done
+}
+
+LoadAppEnv(){
+
+    if [ $# -eq 0 ]; then ExitFatal "Missing parameter when calling LoadAppEnv function"; fi
+
+    if [ ! -f ${1}/application/.env ]; then
+        ${ECHOCMD} "Env not found in ${1} application..."
+        return 1
+    fi
+
+    #if [ "$(file -i ${1}/application/.env | cut -f 2 -d";" | cut -f 2 -d=)" != "us-ascii" ]; then
+
+    #    iconv -c -t US-ASCII < "${1}/application/.env" > "${1}/application/.env.bak"
+    #    mv "${1}/application/.env.bak" "${1}/application/.env"
+
+    #fi
+
+    .  ${1}/application/.env
+
+    if [ $? -eq 0 ]; then return 0; else return 1; fi
+}
+
+GetAsteriskChannels(){
+    ASTERISKBIN=$(which asterisk 2> /dev/null)
+
+    if [ -z "${ASTERISKBIN// }" ]; then
+        ${ECHOCMD} "Asterisk binary not found...";
+        return 1;
+    fi
+
+    if ! IsRunning "asterisk"; then
+        ${ECHOCMD} "Asterisk not running...";
+        return 1;
+    fi
+
+    CHANNELS=$(${ASTERISKBIN} -rx "core show channels concise" 2> /dev/null | ${AWKBINARY} -F\! '{print $1}' |  ${AWKBINARY} 'BEGIN { ORS="" } { print p"'"'"'"$0"'"'"'"; p=", " } END { print "\n" }')
+    return 0;
+}
