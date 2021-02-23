@@ -9,12 +9,12 @@
 %define _bindir         /usr/bin
 
 Summary:                Security tool to audit systems running Linux, macOS, and Unix.
-Name:                   flexy
+Name:                   flexy-manager
 Version:                3.0.3
 Release:                100<RELEASE>%{?dist}
 License:                GPL
 Group:                  Applications/System
-Source:                 flexy-%{version}.tar.gz
+Source:                 flexy-manager-%{version}.tar.gz
 URL:                    https://buzzworks.com/
 Vendor:                 Buzzworks Business Services Pvt Ltd
 Packager:               Buzzworks Business Services Pvt Ltd <help@flexydial.com>
