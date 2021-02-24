@@ -106,7 +106,7 @@
         InstallPackage "httpd httpd-tools mod_ssl python3-mod_wsgi mod_xsendfile openssl openssl-perl"
         setsebool -P httpd_can_network_connect=1
 
-        cp -r flexydial /opt/
+        cp -r /usr/share/flexy/flexydial /opt/
         chmod +x /opt/flexydial/*.sh
         cp /opt/flexydial/flexydial.conf /etc/httpd/conf.d/
 

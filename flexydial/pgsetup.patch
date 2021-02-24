@@ -1,0 +1,44 @@
+--- /usr/bin/postgresql-setup.orig	2020-02-05 19:37:23.000000000 +0530
++++ /usr/bin/postgresql-setup	2020-11-05 22:30:18.245121995 +0530
+@@ -395,6 +395,24 @@
+     done
+ }
+
++handle_service_pgdata()
++{
++    local service="$1"
++    local SERVICE_FILE
++    if [ x"$unit_pgdata" = x ]; then
++        if [ -f "/etc/systemd/system/${service}.service" ]
++        then
++            SERVICE_FILE="/etc/systemd/system/${service}.service"
++        elif [ -f "/usr/lib/systemd/system/${service}.service" ]
++        then
++            SERVICE_FILE="/usr/lib/systemd/system/${service}.service"
++        else
++            debug "Could not find systemd unit file ${service}.service"
++        fi
++        unit_pgdata=`sed -n 's/Environment=PGDATA=//p' "${SERVICE_FILE}"`
++        debug "unit's -datadir: '$unit_pgdata'"
++    fi
++}
+
+ handle_envfile()
+ {
+@@ -500,6 +518,7 @@
+         # postgresql@.service.  The former has PGDATA set by default
+         # similarly to sysvinit case.
+         handle_service_env "$service"
++        handle_service_pgdata "$service"
+         handle_service_envfiles "$option_mode" "$service"
+     fi
+
+@@ -755,7 +774,7 @@
+
+ ## LAST CHECK THE SETUP ##
+
+-check_daemon_reload
++#check_daemon_reload
+
+ # These variables are read by underlying utilites, rather export them.
+ export PGDATA=$pgdata

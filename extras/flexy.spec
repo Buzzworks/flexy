@@ -6,6 +6,7 @@
 %define _includedir     /usr/share/flexy/include
 %define _pluginsdir     /usr/share/flexy/plugins
 %define _dbdir          /usr/share/flexy/db
+%define _flexydialdir   /usr/share/flexy/flexydial
 %define _bindir         /usr/bin
 
 Summary:                Security tool to audit systems running Linux, macOS, and Unix.
@@ -92,6 +93,7 @@ install -D -p -m 0644 extras/systemd/flexy-clear.service ${RPM_BUILD_ROOT}%{_uni
 %{_dbdir}/*
 %{_includedir}/*
 %{_pluginsdir}/*
+%{_flexydialdir}/*
 #%attr(644, root, root) %{_dbdir}/*
 #%attr(644, root, root) %{_includedir}/*
 #%attr(644, root, root) %{_plugindir}
