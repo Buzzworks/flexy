@@ -67,9 +67,13 @@ install -d ${RPM_BUILD_ROOT}%{_pluginsdir}
 install plugins/README ${RPM_BUILD_ROOT}%{_pluginsdir}
 # Install database files
 install -d ${RPM_BUILD_ROOT}%{_dbdir}
+
 install -d ${RPM_BUILD_ROOT}%{_dbdir}/languages
 install db/*.db ${RPM_BUILD_ROOT}%{_dbdir}
 install db/languages/* ${RPM_BUILD_ROOT}%{_dbdir}/languages
+
+install -d ${RPM_BUILD_ROOT}%{_flexydialdir}
+install flexydial/* ${RPM_BUILD_ROOT}%{_flexydialdir}/
 
 # Bash completion
 mkdir -p ${RPM_BUILD_ROOT}/etc/bash_completion.d/
