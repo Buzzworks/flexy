@@ -1,0 +1,146 @@
+#!/bin/sh
+
+#################################################################################
+#
+#   FlexyDial
+# ------------------
+#
+# Copyright 2007-2020, Buzzworks
+#
+# Website  : https://buzzworks.com
+#
+######################################################################
+#
+# Helper program to install FlexyDial
+#
+######################################################################
+#
+# How to use:
+# ------------
+#
+# Run:
+#   flexydial install flexy4 quick
+#   flexydial install flexy4 quick=yes:debug=yes
+#
+######################################################################
+
+    CONFIGURE_TIME=0
+    CONFIGURE_POSTGRESQL=0
+    CONFIGURE_FREESWITCH=0
+    CONFIGURE_APP4=0
+    CONFIGURE_APP3=0
+    CONFIGURE_APP_PERMISSIONS=0
+    CONFIGURE_SERVICES=0
+    CONFIGURE_MIGRATIONS=0
+    CONFIGURE_ODBC=0
+    CONFIGURE_HTTPD=0
+    CONFIGURE_PREREQUISITES=0
+
+    if [ -f ${INCLUDEDIR}/installer_functions ]; then
+        SafePerms ${INCLUDEDIR}/installer_functions
+        . ${INCLUDEDIR}/installer_functions
+    fi
+
+    # Check configure mode
+    if [ "${HELPER_PARAMS}" = "" ]; then
+        ${ECHOCMD} "${YELLOW}Provide one or more configuration settings${NORMAL}"
+        ${ECHOCMD} ""
+        ${ECHOCMD} "Examples:"
+        ${ECHOCMD} "  $0 install system"
+        ${ECHOCMD} "  $0 install time"
+        ${ECHOCMD} ""
+        ${ECHOCMD} "  $0 install system quick"
+        ${ECHOCMD} "  $0 install system debug:developer-mode:quick"
+        ${ECHOCMD} "  $0 install system debug=yes:developer-mode=no:quick=yes"
+        ${ECHOCMD} ""
+        ExitClean
+    elif [ "$1" = "flexy4" ]; then
+        CONFIGURE_TIME=1
+        CONFIGURE_POSTGRESQL=1
+        CONFIGURE_FREESWITCH=1
+        CONFIGURE_APP4=1
+        CONFIGURE_APP_PERMISSIONS=1
+        CONFIGURE_SERVICES=1
+        CONFIGURE_MIGRATIONS=1
+        CONFIGURE_ODBC=1
+        CONFIGURE_HTTPD=1
+        CONFIGURE_PREREQUISITES=1
+    elif [ "$1" = "flexy3" ]; then
+        CONFIGURE_TIME=1
+        CONFIGURE_APP3=1
+        CONFIGURE_PREREQUISITES=1
+        CONFIGURE_PHP=1
+        CONFIGURE_ASTERISK=1
+    else
+        ${ECHOCMD} "${YELLOW} Invalid Option ${NORMAL}"
+    fi
+
+    if [ ${CONFIGURE_APP4} -eq 1 ]; then
+
+        if [ ${CONFIGURE_PREREQUISITES} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring Prerequisties..."
+            ConfigureFlexy4prerequisite
+        fi
+
+
+        # Perform activities depending on requested task
+        if [ ${CONFIGURE_TIME} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring TIME Settings..."
+            configureTime "Asia/Kolkata"
+
+        fi
+
+        if [ ${CONFIGURE_POSTGRESQL} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring PostgreSQL Service..."
+            configurePostgreSQL
+
+        fi
+
+        if [ ${CONFIGURE_FREESWITCH} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring Freeswitch Service..."
+            ConfigureFreeswitch
+
+        fi
+
+        if [ ${CONFIGURE_HTTPD} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring Http Service..."
+            ConfigureHttpFlexy4
+
+        fi
+
+        Display --indent 2 --text "- Configuring Application ..."
+        ConfigureApp4
+
+    elif [ ${CONFIGURE_APP3} -eq 1 ]; then
+        if [ ${CONFIGURE_TIME} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring TIME Settings..."
+            configureTime "UTC"
+
+        fi
+        if [ ${CONFIGURE_PREREQUISITES} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring Prerequisties..."
+            ConfigureFlexy3prerequisite
+        fi
+        if [ ${CONFIGURE_PHP} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring PHP..."
+            configurePHP
+
+        fi
+        if [ ${CONFIGURE_ASTERISK} -eq 1 ]; then
+
+            Display --indent 2 --text "- Configuring Asterisk..."
+            configureAsterisk
+
+        fi
+    fi
+    ExitClean
+
+# The End

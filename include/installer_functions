@@ -1,0 +1,307 @@
+#!/bin/sh
+
+#################################################################################
+#
+#   FlexyDial
+# ------------------
+#
+# Author - Ganapathi Chidambaram - ganapathi.chidambaram@flexydial.com
+# Copyright 2007-2020, Buzzworks
+#
+# Website  : https://buzzworks.com
+
+################################################################################
+
+    ConfigureFlexy4prerequisite() {
+
+        InstallPackage "wget"
+        InstallPackage "vim-enhanced"
+        InstallPackage "epel-release"
+        InstallPackage "git"
+        InstallPackage "gcc-c++"
+        InstallPackage "redhat-rpm-config"
+        InstallPackage "python36-devel"
+        InstallPackage "python2"
+        InstallPackage "nodejs"
+        InstallPackage "swig"
+        InstallPackage "mlocate"
+        InstallPackage "patch"
+        InstallPackage "net-tools"
+        InstallPackage "uuid"
+        InstallPackage "unixODBC-devel"
+        EnableService "redis" "redis"
+        InstallPackage "libsqlite3x"
+        InstallPackage "htop"
+        InstallPackage "glances"
+        InstallPackage "fipscheck"
+
+    }
+    # Name        : configureTime()
+    # Description : Configure TimeZone as mentioned
+    #
+    # Parameters  : $1 = TimeZone Value
+    # Returns     : <nothing>
+    # Usage       : configureTime Asia/Kolkata
+    ################################################################################
+
+    configureTime() {
+
+        if [ $# -eq 0 ] || [ -z "${1// }" ]; then ExitFatal "Missing TimeZone when calling timedatectl function"; fi
+
+        EnableService "chrony" "chronyd"
+
+        timedatectl set-ntp true > /dev/null 2>&1
+        timedatectl set-timezone $1 > /dev/null 2>&1
+
+        Display --indent 6 --text "..." --result "COMPLETED" --color GREEN
+    }
+
+    # Name        : configurePostgreSQL()
+    # Description : Configure TimeZone as mentioned
+    #
+    # Returns     : <nothing>
+    # Usage       : configurePostgreSQL
+    ################################################################################
+
+    configurePostgreSQL() {
+        PSQL_DATA_DIR="/var/lib/pgsql/data"
+
+        InstallPackage "postgresql postgresql-server postgresql-libs postgresql-odbc postgresql-contrib" "12"
+
+        if  CheckInstalledPackage postgresql && [ -z "$(ls -A $PSQL_DATA_DIR)" ]; then
+            Display --indent 4 --text "- PostgreSQL Data Directory Not Exists, hence initializing postgresql"
+            /usr/bin/postgresql-setup --initdb
+            ${SEDBINARY} -i "/^#listen_addresses/a listen_addresses = '\*'" "$PSQL_DATA_DIR/postgresql.conf"
+            ${SEDBINARY} -i "/^local   all             all                                     peer/i host    all             all             all            md5" "$PSQL_DATA_DIR/pg_hba.conf"
+            ${SEDBINARY} -i "/^local   all             all                                     peer/i local all postgres trust" "$PSQL_DATA_DIR/pg_hba.conf"
+        fi
+
+        EnableService "postgresql" "postgresql"
+
+        CreatePostgresUser "flexydial" "flexydial"
+        CreatePostgresDB "flexydial" "flexydial"
+        CreatePostgresDB "crm" "flexydial"
+        CreatePostgresDB "dialerlog" "flexydial"
+        CreatePostgresExten "hstore" "flexydial"
+        CreatePostgresExten "hstore" "crm"
+
+        Display --indent 6 --text "..." --result "COMPLETED" --color GREEN
+    }
+
+    ConfigureFreeswitch() {
+        CreatePSQLODBCConn "freeswitch"
+
+        if ! CheckInstalledPackage freeswitch ; then
+            Display --indent 4 --text "- Freeswitch not installed yet. Hence installing..."
+            if ! FileExists "/etc/yum.repos.d/flexydial.repo" ; then
+                wget https://download.opensuse.org/repositories/home:/ganapathi/CentOS_8_Stream/home:ganapathi.repo -O /etc/yum.repos.d/flexydial.repo > /dev/null 2>&1
+            fi
+            InstallPackage "freeswitch freeswitch-config-flexydial freeswitch-sounds-flexydial freeswitch-lua freeswitch-asrtts-unimrcp"
+            EnableService "freeswitch" "freeswitch"
+            Display --indent 6 --text "..." --result "COMPLETED" --color GREEN
+        fi
+    }
+
+    ConfigureHttpFlexy4(){
+        InstallPackage "httpd httpd-tools mod_ssl python3-mod_wsgi mod_xsendfile openssl openssl-perl"
+        setsebool -P httpd_can_network_connect=1
+
+        cp -r flexydial /opt/
+        chmod +x /opt/flexydial/*.sh
+        cp /opt/flexydial/flexydial.conf /etc/httpd/conf.d/
+
+        . /opt/flexydial/onboot-script.sh
+
+        EnableService "httpd" "httpd"
+    }
+
+    ConfigureApp4(){
+        cd /usr/local/src/
+        git clone -b centos_master --single-branch https://ganapathi:zrtwnDhWxv_y3V6gwSdA@git.buzzworks.com/Pasam/flexydial.git
+
+        pip3 install virtualenv
+
+        install -d /var/lib/flexydial/media/{download,upload}
+        install -d /var/spool/freeswitch/default
+
+        chown -R root:apache flexydial/
+        install -d flexydial/static/fs_config/
+        chmod -R 775 flexydial/static/fs_config/
+
+        #SELinux Permission
+        chcon -t httpd_sys_rw_content_t flexydial/static/ -R
+
+        echo "/opt/flexydial/onboot-script.sh 2>&1 > /tmp/onboot-script.log" >> /etc/rc.d/rc.local
+        chmod +x /etc/rc.d/rc.local
+
+        #cp -f /usr/local/src/flexydial/ref_fs_files/conf/flexydial.conf /etc/httpd/conf.d/
+        cp -f /usr/local/src/flexydial/ref_fs_files/service/flexydial*.service /usr/lib/systemd/system/
+        cp -f /usr/local/src/flexydial/ref_fs_files/conf/sip_profiles/internal.xml /etc/freeswitch/sip_profiles/
+        cp -f /usr/local/src/flexydial/ref_fs_files/conf/sip_profiles/external.xml /etc/freeswitch/sip_profiles/
+        cp -f /usr/local/src/flexydial/ref_fs_files/conf/default.xml /etc/freeswitch/dialplan/
+        cp -f /usr/local/src/flexydial/ref_fs_files/conf/autoload_configs/cdr_pg_csv.conf.xml /etc/freeswitch/autoload_configs/
+
+        cd /usr/local/src/flexydial
+
+        source flexydialenv/bin/activate
+        python manage.py migrate callcenter
+        python manage.py migrate crm --database=crm
+        python manage.py migrate django_apscheduler
+        python manage.py migrate auth
+        python manage.py migrate sessions
+        python manage.py migrate crm --fake
+        #python manage.py create_superuser
+        python manage.py makemigrations
+        python manage.py dummy_fixture
+
+        ## Find the rc-local.service available on after parameter for httpd service, if not available then add it, else leave it.
+        sed -i '/^After=/{/\brc-local\.service\b/!s/$/ rc-local.service/}' /usr/lib/systemd/system/httpd.service
+
+        ## Making freeswitch to start only after those necessary service.
+        sed -i '/^After=.*\.service/{/\brc-local\.service\b/!s/$/ rc-local.service/}' /usr/lib/systemd/system/freeswitch.service
+        sed -i '/^After=.*\.service/{/\bpostgresql-12\.service\b/!s/$/ postgresql-12.service/}' /usr/lib/systemd/system/freeswitch.service
+        sed -i '/^After=.*\.service/{/\bpostgresql\.service\b/!s/$/ postgresql.service/}' /usr/lib/systemd/system/freeswitch.service
+        sed -i '/^After=.*\.service/{/\bhttpd\.service\b/!s/$/ httpd.service/}' /usr/lib/systemd/system/freeswitch.service
+        systemctl daemon-reload
+
+        if [ ! -d "/etc/freeswitch/tls" ]; then
+            mkdir -p "/etc/freeswitch/tls"
+            chown freeswitch.daemon /etc/freeswitch -R
+        fi
+
+        EnableService "false" "flexydial-autodial"
+        EnableService "false" "flexydial-fs-dialplan"
+        EnableService "false" "flexydial-cdrd"
+
+
+    }
+    CreatePostgresUser(){
+        psql -U postgres -c \
+            "DO \$\$ \
+            BEGIN \
+                IF NOT EXISTS (select 1 from pg_roles where rolname = '$1') THEN \
+                   create user $1 with encrypted password '$2'; \
+                END IF; \
+            END \
+            \$\$" > /dev/null 2>&1
+    }
+
+    CreatePostgresDB(){
+
+        if ! $(psql -U postgres -lqt | cut -d \| -f 1 | grep -qw $1); then
+            psql -U postgres -c \
+                "create database $1 owner $2;" > /dev/null 2>&1
+
+            psql -U postgres -c \
+                "GRANT ALL ON DATABASE $1 TO $2;" > /dev/null 2>&1
+        fi;
+    }
+
+    CreatePostgresExten(){
+        local DBEXISTS=0
+        if [ $# -eq 0 ] || [ -z "${1// }" ]; then ExitFatal "Missing Extension Name to create extension"; fi
+
+        if [ -z "${2// }" ]; then
+            DBEXISTS=0
+        else
+            if psql -U postgres -lqt | cut -d \| -f 1 | grep -qw $2 > /dev/null 2>&1; then
+                DBEXISTS=1
+            else
+                DBEXISTS=0
+            fi;
+        fi;
+
+        if [ ${DBEXISTS} -eq 1 ]; then
+            psql -U postgres $2 -c "CREATE EXTENSION IF NOT EXISTS $1;" > /dev/null 2>&1
+        else
+            psql -U postgres -c "CREATE EXTENSION IF NOT EXISTS $1;" > /dev/null 2>&1
+        fi;
+    }
+
+    CreatePSQLODBCConn() {
+
+        cat >> /etc/odbc.ini << EOF
+            [$1]
+            ; ; WARNING: The old psql odbc driver psqlodbc.so is now renamed psqlodbcw.so
+            ; ; in version 08.x. Note that the library can also be installed under another
+            ; ; path than /usr/local/lib/ following your installation.
+            ; ; Description=Connection to LDAP/POSTGRESQL
+            Driver =/usr/lib64/psqlodbca.so
+            Servername=127.0.0.1
+            Port=5432
+            Protocol=6.4
+            FetchBufferSize=99
+            Username=flexydial
+            Password=flexydial
+            Database=flexydial
+            ReadOnly=no
+            Debug=0
+            CommLog=1
+EOF
+
+    }
+
+    InstallPackage(){
+        if [ $# -eq 0 ] || [ -z "${1// }" ]; then ExitFatal "Missing Package Name when calling InstallPackage function"; fi
+
+        local packages=($1)
+
+        if [ ! -z "${2// }" ]; then
+            ${DNFBINARY} -qy module enable "${packages[0]}:$2"
+        fi
+
+        if ! CheckInstalledPackage "${packages[0]}" > /dev/null 2>&1 ; then
+            Display --indent 4 --text "- $1 not installed yet. Hence installing..."
+            ${DNFBINARY} -qy install "${packages[@]}"
+        fi
+
+    }
+    EnableService(){
+        if [ $# -eq 0 ] || [ -z "${1// }" ]; then ExitFatal "Missing Service Name when calling EnableService function"; fi
+
+        local packages=($1)
+        if [ $1 != "false" ] && ! CheckInstalledPackage "${packages[0]}" ; then
+            InstallPackage $1
+        fi
+        #if  CheckInstalledPackage "${packages[0]}" ; then
+            if ! ${SYSTEMCTLBINARY} is-enabled $2 > /dev/null 2>&1  ; then ${SYSTEMCTLBINARY} enable $2; fi
+            if ! ${SYSTEMCTLBINARY} is-active $2 > /dev/null 2>&1 ; then ${SYSTEMCTLBINARY} start $2; fi
+        #else
+        #    Display --indent 4 --text "- Automatic Enabling $1 service failed due to package is not available on the system." --result "FAILED"
+        #fi
+    }
+
+    CheckInstalledPackage(){
+        if [ $# -eq 0 ] || [ -z "${1// }" ]; then ExitFatal "Missing Package Name when calling CheckInstalledPackage function"; fi
+
+        if ${RPMBINARY} -q --quiet $1 > /dev/null 2>&1; then
+            return 0;
+        else
+            return 1;
+        fi
+    }
+
+
+    ConfigureFlexy3prerequisite() {
+
+        InstallPackage "epel-release"
+        InstallPackage "ImageMagick curl perl-libwww-perl libxml2 ncurses screen sox mariadb mariadb-server httpd mod_ssl mod_perl tar perl wget python3-pip cockpit iptables-services libreoffice-core libreoffice-headless git libmad make wget openssl-devel ncurses-devel newt-devel libxml2-devel kernel-devel gcc gcc-c++ sqlite-devel certbot nload iftop vim htop redhat-lsb-core zip strace libid3tag kernel-headers kernel-devel"
+        #EnableService "redis" "redis"
+
+    }
+    configurePHP() {
+        InstallPackage "php php-xml php-gd php-mbstring php-mysqlnd php-pear php-xml php-xmlrpc php-process php-opcache" "7.4"
+    }
+
+    configureAsterisk() {
+
+        if ! CheckInstalledPackage asterisk ; then
+            Display --indent 4 --text "- Asterisk not installed yet. Hence installing..."
+            if ! FileExists "/etc/yum.repos.d/flexydial.repo" ; then
+                wget https://download.opensuse.org/repositories/home:/ganapathi/CentOS_8_Stream/home:ganapathi.repo -O /etc/yum.repos.d/flexydial.repo > /dev/null 2>&1
+            fi
+            InstallPackage "asterisk asterisk-sip asterisk-dahdi dahdi-linux dahdi-tool"
+            EnableService "asterisk" "asterisk"
+            Display --indent 6 --text "..." --result "COMPLETED" --color GREEN
+        fi
+    }
