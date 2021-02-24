@@ -70,12 +70,30 @@ LoadAppEnv(){
         return 1
     fi
 
-    #if [ "$(file -i ${1}/application/.env | cut -f 2 -d";" | cut -f 2 -d=)" != "us-ascii" ]; then
+    CHAR_SET=$(file -i ${1}/application/.env | cut -f 2 -d";" | cut -f 2 -d=)
 
-    #    iconv -c -t US-ASCII < "${1}/application/.env" > "${1}/application/.env.bak"
-    #    mv "${1}/application/.env.bak" "${1}/application/.env"
+    if [ "${CHAR_SET}" != "us-ascii" -a  "${CHAR_SET}" != "binary" ]; then
 
-    #fi
+        iconv -c -t US-ASCII < "${1}/application/.env" > "${1}/application/.env.bak"
+        mv "${1}/application/.env.bak" "${1}/application/.env"
+        chmod +rx "${1}/application/.env"
+
+    fi
+
+    if [ "${CHAR_SET}" == "binary" ]; then
+
+        CHAR_SET=$(file -i ${1}/custom/.env | cut -f 2 -d";" | cut -f 2 -d=);
+
+        if [ "${CHAR_SET}" != "us-ascii" ]; then
+
+            iconv -c -t US-ASCII < "${1}/custom/.env" > "${1}/custom/.env.bak"
+            mv "${1}/custom/.env.bak" "${1}/custom/.env"
+            chmod +rx "${1}/custom/.env"
+            pushd "${1}/application"
+            ln -s "../custom/.env"
+            popd
+        fi
+    fi
 
     .  ${1}/application/.env
 
