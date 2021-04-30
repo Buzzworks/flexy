@@ -73,15 +73,31 @@
     while true;
     do
 
-    sleep 60
+    sleep 1
 
-        if [ ${CLEAR_DIALLINES} -eq 1 ]; then
-            clearDialLines
-        fi
+        for app in "${VHOST_DIR[@]}"; do
 
-        #if [ ${CLEAR_SIPIDS} -eq 1 ]; then
-        #    ${ECHOCMD} "Automatic clearing of sipids is not implemented yet."
-        #fi
+            if [ -z "${app// }" -o ! -d "${app}" ]; then ${ECHOCMD} "App ${app} is invalid or directory not found.."; continue; fi
+
+            if ! LoadAppEnv "${app// }" ; then continue; fi
+
+            ${ECHOCMD} " Processing for the app under ${app}..";
+
+            if [ -z "${DB_HOST// }" -o -z "${DB_USERNAME// }" -o -z "${DB_PASSWORD// }" -o -z "${DB_DATABASE// }" ] ; then
+                ${ECHOCMD} "Database Configuration is missing."
+                continue;
+            fi
+
+            if [ ${CLEAR_DIALLINES} -eq 1 ]; then
+                clearDialLines
+            fi
+
+            if [ ${CLEAR_SIPIDS} -eq 1 ]; then
+            #    ${ECHOCMD} "Automatic clearing of sipids is not implemented yet."
+                clearConfbridge
+            fi            
+
+        done        
     done
 
     ExitClean

@@ -1,5 +1,5 @@
 #!/bin/sh
-
+set -f
 #################################################################################
 #
 #   Flexy
@@ -40,25 +40,39 @@ clearDialLines()
 
     if [  -z "${CHANNELS// }" ] ; then return; fi
 
-    for app in "${VHOST_DIR[@]}"; do
+    ${MYSQLCLIENTBINARY} -h $DB_HOST -u$DB_USERNAME -p$DB_PASSWORD $DB_DATABASE \
+        -e "UPDATE diallines SET status = 'Free',conf='',number='',uniqueid='',src_channel='',channel='',regexstr='',did='' WHERE enabled = 1 and server = '${app_ip}' and status != 'Free' and channel NOT IN ( ${CHANNELS} )" &> /dev/null
 
-        if [ -z "${app// }" -o ! -d "${app}" ]; then ${ECHOCMD} "App ${app} is invalid or directory not found.."; continue; fi
+    if [ $? -ne 0 ]; then ${ECHOCMD} "Error while exeucting mysql query..."; fi
 
-        if ! LoadAppEnv "${app// }" ; then continue; fi
+}
 
-        ${ECHOCMD} " Processing for the app under ${app}..";
+clearConfbridge()
+{
+    GetAsteriskConf
+    
+    if [  -z "${CONFBRIDGE// }" ] ; then return; fi
+    
+    local ConfArry=()
 
-        if [ -z "${DB_HOST// }" -o -z "${DB_USERNAME// }" -o -z "${DB_PASSWORD// }" -o -z "${DB_DATABASE// }" ] ; then
-            ${ECHOCMD} "Database Configuration is missing."
-            continue;
-        fi
-
-        ${MYSQLCLIENTBINARY} -h $DB_HOST -u$DB_USERNAME -p$DB_PASSWORD $DB_DATABASE \
-            -e "UPDATE diallines SET status = 'Free',conf='',number='',uniqueid='',src_channel='',channel='',regexstr='',did='' WHERE enabled = 1 and server = '${app_ip}' and status != 'Free' and channel NOT IN ( ${CHANNELS} )" &> /dev/null
-
-        if [ $? -ne 0 ]; then ${ECHOCMD} "Error while exeucting mysql query..."; fi
-
+    ConfArry=($(${MYSQLCLIENTBINARY} -h $DB_HOST -u$DB_USERNAME -p$DB_PASSWORD $DB_DATABASE \
+        -N -e "select concat('1000',id) as confuser from sipids where status!=0 and id IN ( ${CONFBRIDGE} ) and server = '${app_ip}' " ))
+    
+    if [ ${#ConfArry[@]} -eq 0 ]; then return;fi
+    
+    for u in "${!ConfArry[@]}"
+    do
+        ${ASTERISKBIN} -rx "confbridge kick ${ConfArry[$u]} all" 2> /dev/null
+        ConfArry[$u]=$(echo "${ConfArry[$u]}" | cut -c5-8 )
     done
+    
+    printf -v ConfString "'%s'," "${ConfArry[@]}"
+    
+   result=($(${MYSQLCLIENTBINARY} -h $DB_HOST -u$DB_USERNAME -p$DB_PASSWORD $DB_DATABASE \
+         -N -e "update sipids set status=0,ready=0,patched=0,confup=0,clients='' where servers = '${app_ip}' and id IN ( ${ConfString%,} );SELECT ROW_COUNT(); "))
+    #echo "${result[@]}"
+    if [ $? -ne 0 ]; then ${ECHOCMD} "Error while exeucting mysql query..."; fi
+
 }
 
 LoadAppEnv(){
@@ -114,5 +128,22 @@ GetAsteriskChannels(){
     fi
 
     CHANNELS=$(${ASTERISKBIN} -rx "core show channels concise" 2> /dev/null | ${AWKBINARY} -F\! '{print $1}' |  ${AWKBINARY} 'BEGIN { ORS="" } { print p"'"'"'"$0"'"'"'"; p=", " } END { print "\n" }')
+    return 0;
+}
+
+GetAsteriskConf(){
+    ASTERISKBIN=$(which asterisk 2> /dev/null)
+
+    if [ -z "${ASTERISKBIN// }" ]; then
+        ${ECHOCMD} "Asterisk binary not found...";
+        return 1;
+    fi
+
+    if ! IsRunning "asterisk"; then
+        ${ECHOCMD} "Asterisk not running...";
+        return 1;
+    fi
+
+    CONFBRIDGE=$(${ASTERISKBIN} -rx "confbridge list" 2> /dev/null | ${SEDBINARY} 1,2d | ${AWKBINARY} '{print substr($1,5,length($1)-1)}' |  ${AWKBINARY} 'BEGIN { ORS="" } { print p"'"'"'"$0"'"'"'"; p=", " } END { print "\n" }')
     return 0;
 }
